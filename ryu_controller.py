@@ -23,8 +23,11 @@ from os_ken.controller.handler import set_ev_cls
 from os_ken.ofproto import ofproto_v1_3
 from os_ken.lib.packet import packet
 from os_ken.lib.packet import ethernet
+from os_ken.lib.packet import ipv4
 from os_ken.lib.packet import ether_types
 from os_ken.lib import hub
+from os_ken.topology import event, switches
+from os_ken.app.ofctl.api import get_datapath
 
 
 class SimpleSwitch13(app_manager.OSKenApp):
@@ -33,6 +36,33 @@ class SimpleSwitch13(app_manager.OSKenApp):
     def __init__(self, *args, **kwargs):
         super(SimpleSwitch13, self).__init__(*args, **kwargs)
         self.mac_to_port = {}
+
+    @set_ev_cls(event.EventSwitchEnter)
+    def _event_switch_enter_handler(self, ev):
+        dpid = ev.dpid
+        datapath = get_datapath(self, dpid)
+        parser = datapath.parser
+        ofproto = datapath.ofproto
+
+        # lowest priority action: If packet is IPv4, drop
+        match = parser.OFPMatch(eth_type=ether_types.ETH_TYPE_IP)
+        inst = [parser.OFPInstructionActions(ofproto.OFPIT_CLEAR_ACTIONS, [])]
+        mod = parser.OFPFlowMod(datapath=datapath, priority=0, match=match, instructions=inst)
+        datapath.send_msg(mod)
+
+        for p in ev.ports:
+            num = int(p.port_no)
+            match = parser.OFPMatch(in_port=p, ipv4_src=f"10.0.0.{num}")
+            actions = [parser.OFPActionOutput(out_port)]
+            self.add_flow(dpid, 1, match, actions)
+            pass
+        msg = ev.switch.to_dict()
+        self.logger.info(f'event_switch_enter: {msg}')
+
+    @set_ev_cls(event.EventHostAdd)
+    def _event_host_add_handler(self, ev):
+        msg = ev.host.to_dict()
+        self.logger.info(f'event_host_add: {msg}')
 
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
     def switch_features_handler(self, ev):
@@ -82,6 +112,9 @@ class SimpleSwitch13(app_manager.OSKenApp):
 
         pkt = packet.Packet(msg.data)
         eth = pkt.get_protocols(ethernet.ethernet)[0]
+        ip = pkt.get_protocols(ipv4.ipv4)
+        if len(ip) > 0:
+            self.logger.info(ip)
 
         if eth.ethertype == ether_types.ETH_TYPE_LLDP:
             # ignore lldp packet
@@ -96,6 +129,7 @@ class SimpleSwitch13(app_manager.OSKenApp):
 
         # learn a mac address to avoid FLOOD next time.
         self.mac_to_port[dpid][src] = in_port
+        self.logger.info(f"learned mac address dpid: {dpid} src: {src}, dst: {dst} in_port: {in_port}")
 
         if dst in self.mac_to_port[dpid]:
             out_port = self.mac_to_port[dpid][dst]
