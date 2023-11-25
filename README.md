@@ -1,8 +1,8 @@
 # SDN-DDoS-Mitigation-SYSC4701-Project
 
 ```
-pip install os-ken
-pip install scapy
+sudo apt install python3-ryu
+sudo apt install python3-scapy
 ```
 
 https://opennetworking.org/wp-content/uploads/2014/10/openflow-switch-v1.5.1.pdf
