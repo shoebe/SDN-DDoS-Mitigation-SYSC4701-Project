@@ -20,6 +20,18 @@ sudo pip3 uninstall ryu
 sudo apt install python3-ryu
 ```
 
+To run:
+```
+ryu-manager ryu_controller.py
+python3 mininet-sim.py
+```
+
+Check flows:
+```
+dpctl dump flows
+```
+
+
 https://github.com/mininet/openflow-tutorial/wiki/Router-Exercise
 
 https://opennetworking.org/wp-content/uploads/2014/10/openflow-switch-v1.5.1.pdf
