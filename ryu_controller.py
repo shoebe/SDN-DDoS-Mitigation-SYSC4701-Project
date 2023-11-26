@@ -26,43 +26,14 @@ from ryu.lib.packet import ethernet
 from ryu.lib.packet import ipv4
 from ryu.lib.packet import ether_types
 from ryu.lib import hub
-from ryu.topology import event, switches
-from ryu.app.ofctl.api import get_datapath
-
 
 class SimpleSwitch13(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
 
     def __init__(self, *args, **kwargs):
         super(SimpleSwitch13, self).__init__(*args, **kwargs)
-        self.mac_to_port = {}
 
-    @set_ev_cls(event.EventSwitchEnter)
-    def _event_switch_enter_handler(self, ev):
-        dpid = ev.dpid
-        datapath = get_datapath(self, dpid)
-        parser = datapath.parser
-        ofproto = datapath.ofproto
-
-        # lowest priority action: If packet is IPv4, drop
-        match = parser.OFPMatch(eth_type=ether_types.ETH_TYPE_IP)
-        inst = [parser.OFPInstructionActions(ofproto.OFPIT_CLEAR_ACTIONS, [])]
-        mod = parser.OFPFlowMod(datapath=datapath, priority=0, match=match, instructions=inst)
-        datapath.send_msg(mod)
-
-        for p in ev.ports:
-            num = int(p.port_no)
-            match = parser.OFPMatch(in_port=p, ipv4_src=f"10.0.0.{num}")
-            actions = [parser.OFPActionOutput(out_port)]
-            self.add_flow(dpid, 1, match, actions)
-            pass
-        msg = ev.switch.to_dict()
-        self.logger.info(f'event_switch_enter: {msg}')
-
-    @set_ev_cls(event.EventHostAdd)
-    def _event_host_add_handler(self, ev):
-        msg = ev.host.to_dict()
-        self.logger.info(f'event_host_add: {msg}')
+        self.mac_to_port = {}      
 
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
     def switch_features_handler(self, ev):
@@ -71,18 +42,42 @@ class SimpleSwitch13(app_manager.RyuApp):
         parser = datapath.ofproto_parser
 
         # install table-miss flow entry
-        #
-        # We specify NO BUFFER to max_len of the output action due to
-        # OVS bug. At this moment, if we specify a lesser number, e.g.,
-        # 128, OVS will send Packet-In with invalid buffer_id and
-        # truncated packet data. In that case, we cannot output packets
-        # correctly.  The bug has been fixed in OVS v2.1.0.
         match = parser.OFPMatch()
-        actions = [parser.OFPActionOutput(ofproto.OFPP_CONTROLLER,
-                                          ofproto.OFPCML_NO_BUFFER)]
-        self.add_flow(datapath, 0, match, actions)
+        actions = [parser.OFPActionOutput(ofproto.OFPP_CONTROLLER)] # packets will be forwarded to controller
+        self.add_flow(datapath, 0, match, actions, table_id=1)
 
-    def add_flow(self, datapath, priority, match, actions, buffer_id=None):
+        # Add entries to table 0 (checked before table 1)
+        # table-miss, goto table 1
+        match = parser.OFPMatch()
+        self.add_goto_table(datapath, 0, match, add_to_table_id=0, goto_table_id=1)
+
+        # ASSUME tree topology with fanout = 3, depth = 2
+        switch_num = datapath.id # 1 for s1, 2 for s2, etc.
+        if switch_num == 1: # s1 does not drop packets based on IP
+            return
+        
+        # table-miss for IPv4 packets (packets that do not have the right IP)
+        match = parser.OFPMatch(eth_type=ether_types.ETH_TYPE_IP)
+        actions = [] # no action, packets dropped
+        self.add_flow(datapath, 1, match, actions, table_id=0)
+
+        for i in range(1, 3+1):
+            host_num = (switch_num-2) * 3 + i # 1,2,3 for s2; 4,5,6 for s3 ...
+            match = parser.OFPMatch(eth_type=ether_types.ETH_TYPE_IP, ipv4_src=f"10.0.0.{host_num}", in_port=i)
+            self.add_goto_table(datapath, 2, match, add_to_table_id=0, goto_table_id=1) # same as table-miss for non-IPv4
+
+            match = parser.OFPMatch(eth_type=ether_types.ETH_TYPE_IP, ipv4_dst=f"10.0.0.{host_num}")
+            self.add_goto_table(datapath, 2, match, add_to_table_id=0, goto_table_id=1) # same as table-miss for non-IPv4
+
+
+    def add_goto_table(self, datapath, priority, match, add_to_table_id, goto_table_id):
+        parser = datapath.ofproto_parser
+
+        inst = [parser.OFPInstructionGotoTable(goto_table_id)]
+        mod = parser.OFPFlowMod(datapath=datapath, priority=priority, match=match, instructions=inst, table_id=add_to_table_id)
+        datapath.send_msg(mod)
+
+    def add_flow(self, datapath, priority, match, actions, table_id, buffer_id=None):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
 
@@ -91,10 +86,10 @@ class SimpleSwitch13(app_manager.RyuApp):
         if buffer_id:
             mod = parser.OFPFlowMod(datapath=datapath, buffer_id=buffer_id,
                                     priority=priority, match=match,
-                                    instructions=inst)
+                                    instructions=inst, table_id=table_id)
         else:
             mod = parser.OFPFlowMod(datapath=datapath, priority=priority,
-                                    match=match, instructions=inst)
+                                    match=match, instructions=inst, table_id=table_id)
         datapath.send_msg(mod)
 
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
@@ -144,10 +139,10 @@ class SimpleSwitch13(app_manager.RyuApp):
             # verify if we have a valid buffer_id, if yes avoid to send both
             # flow_mod & packet_out
             if msg.buffer_id != ofproto.OFP_NO_BUFFER:
-                self.add_flow(datapath, 1, match, actions, msg.buffer_id)
+                self.add_flow(datapath, 10, match, actions, table_id=1, buffer_id=msg.buffer_id)
                 return
             else:
-                self.add_flow(datapath, 1, match, actions)
+                self.add_flow(datapath, 10, match, actions, table_id=1)
         data = None
         if msg.buffer_id == ofproto.OFP_NO_BUFFER:
             data = msg.data
@@ -177,6 +172,7 @@ class SimpleMonitor13(SimpleSwitch13):
                 del self.datapaths[datapath.id]
 
     def _monitor(self):
+        return # disabled for now
         while True:
             for dp in self.datapaths.values():
                 self._request_stats(dp)
