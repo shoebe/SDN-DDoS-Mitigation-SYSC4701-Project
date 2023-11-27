@@ -22,8 +22,7 @@ sudo apt install python3-ryu
 
 To run:
 ```
-ryu-manager ryu_controller.py
-python3 mininet-sim.py
+./start.bash
 ```
 
 Check flows:

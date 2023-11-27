@@ -16,7 +16,7 @@ setLogLevel( 'info' )
 controller = RemoteController('controller', port=6653)
 
 topo = TreeTopo( depth=2, fanout=3 )
-net = Mininet( topo=topo, switch=OVSSwitch, build=False, waitConnected=False, autoSetMacs=True, autoStaticArp=True, controller=RemoteController)
+net = Mininet( topo=topo, switch=OVSSwitch, build=False, waitConnected=True, autoSetMacs=True, autoStaticArp=True, controller=RemoteController)
 net.addController(controller)
 net.build()
 net.start()
