@@ -68,7 +68,7 @@ class SimpleSwitch13(app_manager.RyuApp):
                 match = parser.OFPMatch(eth_type=ether_types.ETH_TYPE_IP, ipv4_src=f"10.0.0.{host_num}", in_port=i)
                 self.add_goto_table(datapath, 2, match, add_to_table_id=0, goto_table_id=1) # same as table-miss for non-IPv4
 
-                match = parser.OFPMatch(eth_type=ether_types.ETH_TYPE_IP, ipv4_dst=f"10.0.0.{host_num}")
+                match = parser.OFPMatch(eth_type=ether_types.ETH_TYPE_IP, ipv4_dst=f"10.0.0.{host_num}", in_port=4)
                 self.add_goto_table(datapath, 2, match, add_to_table_id=0, goto_table_id=1) # same as table-miss for non-IPv4
 
 
