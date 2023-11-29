@@ -26,12 +26,20 @@ class CoolTopology(Topo):
             switch_ip = f"10.0.{s_ind}.100"
             switch_mac = f"00:0{s_ind}:00:00:00:00"
             s = self.addSwitch(f"s{s_ind}")
+            ips = [""] * (NUM_HOSTS_PER_SWITCH + 1)
+            macs = [""] * (NUM_HOSTS_PER_SWITCH + 1)
+            ips[0] = switch_ip
+            macs[0] = switch_mac
+            for i in range(1, NUM_HOSTS_PER_SWITCH + 1):
+                ips[i] = f"10.0.{s_ind}.{i}"
+                macs[i] = f"00:0{s_ind}:00:00:00:0{i}"
             for i in range(1, NUM_HOSTS_PER_SWITCH + 1):
                 h = self.addHost(
                     f"h{NUM_HOSTS_PER_SWITCH * (s_ind-1) + i}",
-                    ip=f"10.0.{s_ind}.{i}/24",
+                    ip=f"{ips[i]}/24",
                     defaultRoute=f"via {switch_ip}",
-                    arp=(switch_ip, switch_mac),
+                    mac=macs[i],
+                    arp=zip(ips, macs),
                 )
                 # 1Mbps rate from host to switch
                 self.addLink(h, s, port2=i, bw=1)
@@ -46,7 +54,7 @@ class CoolTopology(Topo):
             "server",
             ip=f"10.0.{s_ind}.1/24",
             defaultRoute=f"via {switch_ip}",
-            arp=(switch_ip, switch_mac),
+            arp=[(switch_ip, switch_mac)],
         )
         # 3Mbps
         self.addLink(server, server_switch, bw=3)
@@ -65,7 +73,9 @@ class CoolHost(Host):
         # the superclass config method here as follows:
         r = super().config(mac, ip, defaultRoute, lo, **_params)
         # self.setIP(ip=ip, prefixLen=self.params["ip_prefix"])
-        self.setARP(ip=self.params["arp"][0], mac=self.params["arp"][1])
+        #print([a for a in self.params["arp"]])
+        for (ip, mac) in self.params["arp"]:
+            self.setARP(ip=ip, mac=mac)
         return r
 
 
