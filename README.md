@@ -30,7 +30,7 @@ Check flows:
 dpctl dump flows
 ```
 
-
+!["Topology diagram](topology-diagram.png)
 https://github.com/mininet/openflow-tutorial/wiki/Router-Exercise
 
 https://opennetworking.org/wp-content/uploads/2014/10/openflow-switch-v1.5.1.pdf
