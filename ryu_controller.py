@@ -23,7 +23,7 @@ from ryu.controller.handler import set_ev_cls
 from ryu.ofproto import ofproto_v1_3
 from ryu.lib.packet import packet
 from ryu.lib.packet import ethernet
-from ryu.lib.packet import ipv4
+from ryu.lib.packet import ipv4, icmp
 from ryu.lib.packet import ether_types
 from ryu.lib import hub
 import os
@@ -48,11 +48,6 @@ class SimpleSwitch13(app_manager.RyuApp):
         # actions = [parser.OFPActionOutput(ofproto.OFPP_CONTROLLER)] # packets will be forwarded to controller
         actions = []  # packets dropped
         self.add_flow(datapath, 0, match, actions)
-
-        # Add entries to table 0 (checked before table 1)
-        # table-miss, goto table 1
-        # match = parser.OFPMatch()
-        # self.add_goto_table(datapath, 0, match, add_to_table_id=0, goto_table_id=1)
 
         # ASSUME tree topology with fanout = 3, depth = 2
         switch_num = datapath.id  # 1 s1, 2 for s2, 20 for s20
@@ -139,5 +134,9 @@ class SimpleSwitch13(app_manager.RyuApp):
         ip = pkt.get_protocols(ipv4.ipv4)
         if len(ip) > 0:
             self.logger.info(ip)
+
+        icmp_info = pkt.get_protocols(icmp.icmp)
+        if len(ip) > 0:
+            self.logger.info(icmp_info)
 
         print(f"packet in: {pkt} from datapath id: {datapath.id}")

@@ -27,7 +27,7 @@ To run:
 
 Check flows:
 ```
-dpctl dump flows
+dpctl dump-flows
 ```
 
 !["Topology diagram](topology-diagram.png)
