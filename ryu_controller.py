@@ -28,13 +28,14 @@ from ryu.lib.packet import ether_types
 from ryu.lib import hub
 import os
 
+
 class SimpleSwitch13(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
 
     def __init__(self, *args, **kwargs):
         super(SimpleSwitch13, self).__init__(*args, **kwargs)
 
-        self.mac_to_port = {}      
+        self.mac_to_port = {}
 
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
     def switch_features_handler(self, ev):
@@ -44,54 +45,80 @@ class SimpleSwitch13(app_manager.RyuApp):
 
         # install table-miss flow entry
         match = parser.OFPMatch()
-        actions = [parser.OFPActionOutput(ofproto.OFPP_CONTROLLER)] # packets will be forwarded to controller
-        self.add_flow(datapath, 0, match, actions, table_id=1)
+        # actions = [parser.OFPActionOutput(ofproto.OFPP_CONTROLLER)] # packets will be forwarded to controller
+        actions = []  # packets dropped
+        self.add_flow(datapath, 0, match, actions)
 
         # Add entries to table 0 (checked before table 1)
         # table-miss, goto table 1
-        match = parser.OFPMatch()
-        self.add_goto_table(datapath, 0, match, add_to_table_id=0, goto_table_id=1)
+        # match = parser.OFPMatch()
+        # self.add_goto_table(datapath, 0, match, add_to_table_id=0, goto_table_id=1)
 
         # ASSUME tree topology with fanout = 3, depth = 2
-        switch_num = datapath.id # 1 for s1, 2 for s2, etc.
-        if switch_num == 1: # s1 does not drop packets based on IP
+        switch_num = datapath.id  # 1 s1, 2 for s2, 20 for s20
+        if switch_num == 20:  # s20 (parent switch)
+            for port_num in range(1, 4 + 1):
+                match = parser.OFPMatch(
+                    eth_type=ether_types.ETH_TYPE_IP,
+                    ipv4_dst=f"10.0.{port_num}.0/24",
+                )
+                actions = [parser.OFPActionOutput(port_num)]
+                self.add_flow(datapath, 1, match, actions)
             return
 
-        if "BCP38_ENABLED" in os.environ:
-            # table-miss for IPv4 packets (packets that do not have the right IP)
-            match = parser.OFPMatch(eth_type=ether_types.ETH_TYPE_IP)
-            actions = [] # no action, packets dropped
-            self.add_flow(datapath, 1, match, actions, table_id=0)
+        num_hosts = 3
+        if switch_num == 4:
+            num_hosts = 1
 
-            for i in range(1, 3+1):
-                host_num = (switch_num-2) * 3 + i # 1,2,3 for s2; 4,5,6 for s3 ...
-                match = parser.OFPMatch(eth_type=ether_types.ETH_TYPE_IP, ipv4_src=f"10.0.0.{host_num}", in_port=i)
-                self.add_goto_table(datapath, 2, match, add_to_table_id=0, goto_table_id=1) # same as table-miss for non-IPv4
+        for port_num in range(1, num_hosts + 1):
+            addr = f"10.0.{switch_num}.{port_num}"
+            match = parser.OFPMatch(
+                eth_type=ether_types.ETH_TYPE_IP,
+                ipv4_dst=addr,
+            )
+            print(f"00:0{switch_num}:00:00:00:0{port_num}")
+            actions = [
+                parser.OFPActionSetField(
+                    eth_src=f"00:0{switch_num}:00:00:00:00",
+                ),
+                parser.OFPActionSetField(
+                    eth_dst=f"00:0{switch_num}:00:00:00:0{port_num}",
+                ),
+                parser.OFPActionOutput(port_num),
+            ]
+            self.add_flow(datapath, 2, match, actions)
 
-                match = parser.OFPMatch(eth_type=ether_types.ETH_TYPE_IP, ipv4_dst=f"10.0.0.{host_num}", in_port=4)
-                self.add_goto_table(datapath, 2, match, add_to_table_id=0, goto_table_id=1) # same as table-miss for non-IPv4
+            match = parser.OFPMatch()
+            if "BCP38_ENABLED" in os.environ:
+                match = parser.OFPMatch(
+                    ipv4_src=addr,
+                    eth_type=ether_types.ETH_TYPE_IP,
+                )
+            actions = [parser.OFPActionOutput(num_hosts + 1)]
+            self.add_flow(datapath, 1, match, actions)
 
-
-    def add_goto_table(self, datapath, priority, match, add_to_table_id, goto_table_id):
-        parser = datapath.ofproto_parser
-
-        inst = [parser.OFPInstructionGotoTable(goto_table_id)]
-        mod = parser.OFPFlowMod(datapath=datapath, priority=priority, match=match, instructions=inst, table_id=add_to_table_id)
-        datapath.send_msg(mod)
-
-    def add_flow(self, datapath, priority, match, actions, table_id, buffer_id=None):
+    def add_flow(self, datapath, priority, match, actions, table_id=0, buffer_id=None):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
 
-        inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS,
-                                             actions)]
+        inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS, actions)]
         if buffer_id:
-            mod = parser.OFPFlowMod(datapath=datapath, buffer_id=buffer_id,
-                                    priority=priority, match=match,
-                                    instructions=inst, table_id=table_id)
+            mod = parser.OFPFlowMod(
+                datapath=datapath,
+                buffer_id=buffer_id,
+                priority=priority,
+                match=match,
+                instructions=inst,
+                table_id=table_id,
+            )
         else:
-            mod = parser.OFPFlowMod(datapath=datapath, priority=priority,
-                                    match=match, instructions=inst, table_id=table_id)
+            mod = parser.OFPFlowMod(
+                datapath=datapath,
+                priority=priority,
+                match=match,
+                instructions=inst,
+                table_id=table_id,
+            )
         datapath.send_msg(mod)
 
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
@@ -99,11 +126,13 @@ class SimpleSwitch13(app_manager.RyuApp):
         # If you hit this you might want to increase
         # the "miss_send_length" of your switch
         if ev.msg.msg_len < ev.msg.total_len:
-            self.logger.debug(f"packet truncated: only {ev.msg.msg_len} of {ev.msg.total_len} bytes")
+            self.logger.debug(
+                f"packet truncated: only {ev.msg.msg_len} of {ev.msg.total_len} bytes"
+            )
         msg = ev.msg
         datapath = msg.datapath
-        #ofproto = datapath.ofproto
-        #parser = datapath.ofproto_parser
+        # ofproto = datapath.ofproto
+        # parser = datapath.ofproto_parser
 
         pkt = packet.Packet(msg.data)
         eth = pkt.get_protocols(ethernet.ethernet)[0]
@@ -111,9 +140,4 @@ class SimpleSwitch13(app_manager.RyuApp):
         if len(ip) > 0:
             self.logger.info(ip)
 
-        if eth.ethertype == ether_types.ETH_TYPE_LLDP:
-            # ignore lldp packet
-            return
         print(f"packet in: {pkt} from datapath id: {datapath.id}")
-        
-
