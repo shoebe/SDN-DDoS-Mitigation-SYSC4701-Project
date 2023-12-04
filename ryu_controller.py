@@ -103,7 +103,7 @@ class SimpleSwitch13(app_manager.RyuApp):
                 actions.append(parser.OFPActionOutput(ofproto.OFPP_CONTROLLER))
             self.add_flow(datapath, 1, match, actions)
 
-    def add_flow(self, datapath, priority, match, actions, table_id=0, buffer_id=None):
+    def add_flow(self, datapath, priority, match, actions, table_id=0, buffer_id=None, idle_timeout=0):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
 
@@ -115,6 +115,7 @@ class SimpleSwitch13(app_manager.RyuApp):
                 priority=priority,
                 match=match,
                 instructions=inst,
+                idle_timeout=idle_timeout,
                 table_id=table_id,
             )
         else:
@@ -123,6 +124,7 @@ class SimpleSwitch13(app_manager.RyuApp):
                 priority=priority,
                 match=match,
                 instructions=inst,
+                idle_timeout=idle_timeout,
                 table_id=table_id,
             )
         datapath.send_msg(mod)
@@ -132,27 +134,22 @@ class SimpleSwitch13(app_manager.RyuApp):
         # If you hit this you might want to increase
         # the "miss_send_length" of your switch
         if ev.msg.msg_len < ev.msg.total_len:
-            #self.logger.debug(
-             #   f"packet truncated: only {ev.msg.msg_len} of {ev.msg.total_len} bytes"
-            #)
             pass
+           
+        # extract info
         msg = ev.msg
         datapath = msg.datapath
-        # ofproto = datapath.ofproto
-        # parser = datapath.ofproto_parser
+        parser = datapath.ofproto_parser
 
+	# extract ethernet, ip, and icmp info
         pkt = packet.Packet(msg.data)
         eth = pkt.get_protocols(ethernet.ethernet)[0]
         ip = pkt.get_protocols(ipv4.ipv4)[0]
         icmp_info = pkt.get_protocols(icmp.icmp)[0]
 
-        # 0 or 8
-        #self.logger.info(icmp_info.type)    
-        
-        # IP source = ip.src
-        # IP destination = ip.dst
-
-        # Request
+        # When packet is ICMP request:
+        # If request from specific host does not exist in icmp_request dictionary, add it to both the request and reply dictionaries and set values to 0
+        # Update value of specific host (key) every time packet is ICMP request in icmp_request dictionary
         host_ip = ""
         if icmp_info.type == 8:
             if not ip.src in self.icmp_request:
@@ -161,7 +158,9 @@ class SimpleSwitch13(app_manager.RyuApp):
             self.icmp_request[ip.src] += 1
             host_ip = ip.src
                 
-        # Response
+        # When packet is ICMP reply:
+        # If reply from specific host is not in the icmp_reply dictionary, add it to both the request and reply dictionaries and set values to 0
+        # Update value of specific host (key) every time packet is ICMP reply in icmp_reply dictionary
         elif icmp_info.type == 0:
             if not ip.dst in self.icmp_reply:
                 self.icmp_request[ip.dst] = 0
@@ -169,11 +168,18 @@ class SimpleSwitch13(app_manager.RyuApp):
             self.icmp_reply[ip.dst] += 1
             host_ip = ip.dst
 
+	# print out request and reply dictionaries
         self.logger.info(self.icmp_reply)
         self.logger.info(self.icmp_request)
             
+        # If there are 4 more requests than replies, assume DDoS attack is occuring
+        # Create flow to drop packets
         if self.icmp_request[host_ip] - self.icmp_reply[host_ip] >= 4:
-            # add flow to drop packets
-            self.logger.info(f"DROPPED PACKETS - {host_ip}")
-        
-        #print(f"packet in: {pkt} from datapath id: {datapath.id}")
+            match = parser.OFPMatch(
+                    eth_type=ether_types.ETH_TYPE_IP,
+                    ipv4_dst='10.0.4.1',
+                    ipv4_src=host_ip,
+                )
+            actions = []
+            self.add_flow(datapath, 3, match, actions, idle_timeout=5)
+
