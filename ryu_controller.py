@@ -28,35 +28,16 @@ from ryu.lib.packet import ether_types
 from ryu.lib import hub
 import os
 
-icmp_request = {}
-icmp_reply = {}
 
-h1_request_counter = 0
-h2_request_counter = 0
-h3_request_counter = 0
-h4_request_counter = 0
-h5_request_counter = 0
-h6_request_counter = 0
-h7_request_counter = 0
-h8_request_counter = 0
-h9_request_counter = 0
-
-h1_reply_counter = 0
-h2_reply_counter = 0
-h3_reply_counter = 0
-h4_reply_counter = 0
-h5_reply_counter = 0
-h6_reply_counter = 0
-h7_reply_counter = 0
-h8_reply_counter = 0
-h9_reply_counter = 0
 
 class SimpleSwitch13(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
 
     def __init__(self, *args, **kwargs):
         super(SimpleSwitch13, self).__init__(*args, **kwargs)
-        self.mac_to_port = {}
+        self.icmp_request = {}
+        self.icmp_reply = {}
+
 
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
     def switch_features_handler(self, ev):
@@ -162,116 +143,37 @@ class SimpleSwitch13(app_manager.RyuApp):
 
         pkt = packet.Packet(msg.data)
         eth = pkt.get_protocols(ethernet.ethernet)[0]
-        ip = pkt.get_protocols(ipv4.ipv4)
-        if len(ip) > 0:
-            #self.logger.info(ip)
-            pass
-            
+        ip = pkt.get_protocols(ipv4.ipv4)[0]
         icmp_info = pkt.get_protocols(icmp.icmp)[0]
-        if len(ip) > 0:
-            #self.logger.info(icmp_info)
-            pass
-            
+
         # 0 or 8
-        self.logger.info(icmp_info.type)    
+        #self.logger.info(icmp_info.type)    
         
         # IP source = ip.src
         # IP destination = ip.dst
 
         # Request
-        if(icmp_info.type == 8):
-            if ip.src == "10.0.1.1":
-                h1_request_counter += 1
-                icmp_request[ip.src] = h1_request_counter
-            elif ip.src == "10.0.1.2":
-                h2_request_counter += 1
-                icmp_request[ip.src] = h2_request_counter
-            elif ip.src == "10.0.1.3":
-                h3_request_counter += 1
-                icmp_request[ip.src] = h3_request_counter
-            elif ip.src == "10.0.1.4":
-                h4_request_counter += 1
-                icmp_request[ip.src] = h4_request_counter
-            elif ip.src == "10.0.1.5":
-                h5_request_counter += 1
-                icmp_request[ip.src] = h5_request_counter
-            elif ip.src == "10.0.1.6":
-                h6_request_counter += 1
-                icmp_request[ip.src] = h6_request_counter
-            elif ip.src == "10.0.1.7":
-                h7_request_counter += 1
-                icmp_request[ip.src] = h7_request_counter
-            elif ip.src == "10.0.1.8":
-                h8_request_counter += 1
-                icmp_request[ip.src] = h8_request_counter
-            elif ip.src == "10.0.1.9":
-                h9_request_counter += 1
-                icmp_request[ip.src] = h9_request_counter
+        host_ip = ""
+        if icmp_info.type == 8:
+            if not ip.src in self.icmp_request:
+                self.icmp_request[ip.src] = 0
+                self.icmp_reply[ip.src] = 0
+            self.icmp_request[ip.src] += 1
+            host_ip = ip.src
                 
         # Response
-        elif (icmp_info.type == 0):
-            if ip.dst == "10.0.1.1":
-                h1_reply_counter += 1
-                icmp_reply[ip.src] = h1_reply_counter
-            elif ip.dst == "10.0.1.2":
-                h2_reply_counter += 1
-                icmp_reply[ip.src] = h2_reply_counter
-            elif ip.dst == "10.0.1.3":
-                h3_reply_counter += 1
-                icmp_reply[ip.src] = h3_reply_counter
-            elif ip.dst == "10.0.1.4":
-                h4_reply_counter += 1
-                icmp_reply[ip.src] = h4_reply_counter
-            elif ip.dst == "10.0.1.5":
-                h5_reply_counter += 1
-                icmp_reply[ip.src] = h5_reply_counter
-            elif ip.dst == "10.0.1.6":
-                h6_reply_counter += 1
-                icmp_reply[ip.src] = h6_reply_counter
-            elif ip.dst == "10.0.1.7":
-                h7_reply_counter += 1
-                icmp_reply[ip.src] = h7_reply_counter
-            elif ip.dst == "10.0.1.8":
-                h8_reply_counter += 1
-                icmp_reply[ip.src] = h8_reply_counter
-            elif ip.dst == "10.0.1.9":
-                h9_reply_counter += 1
-                icmp_reply[ip.src] = h9_reply_counter            
-                
-        if ((icmp_request.get("10.0.1.1") != 0 and icmp_reply.get("10.0.1.1") != 0) and (icmp_request.get("10.0.1.1") - icmp_reply.get("10.0.1.1") >= 4)):
+        elif icmp_info.type == 0:
+            if not ip.dst in self.icmp_reply:
+                self.icmp_request[ip.dst] = 0
+                self.icmp_reply[ip.dst] = 0
+            self.icmp_reply[ip.dst] += 1
+            host_ip = ip.dst
+
+        self.logger.info(self.icmp_reply)
+        self.logger.info(self.icmp_request)
+            
+        if self.icmp_request[host_ip] - self.icmp_reply[host_ip] >= 4:
             # add flow to drop packets
-            print("DROPPED PACKETS - H1")
+            self.logger.info(f"DROPPED PACKETS - {host_ip}")
         
-        if ((icmp_request.get("10.0.1.2") != 0 and icmp_reply.get("10.0.1.2") != 0) and (icmp_request.get("10.0.1.2") - icmp_reply.get("10.0.1.2") >= 4)):
-            # add flow to drop packets
-            print("DROPPED PACKETS - H2")
-
-        if ((icmp_request.get("10.0.1.3") != 0 and icmp_reply.get("10.0.1.3") != 0) and (icmp_request.get("10.0.1.3") - icmp_reply.get("10.0.1.3") >= 4)):
-            # add flow to drop packets
-            print("DROPPED PACKETS - H3")        
-
-        if ((icmp_request.get("10.0.1.4") != 0 and icmp_reply.get("10.0.1.4") != 0) and (icmp_request.get("10.0.1.4") - icmp_reply.get("10.0.1.4") >= 4)):
-            # add flow to drop packets
-            print("DROPPED PACKETS - H4")                    
-
-        if ((icmp_request.get("10.0.1.5") != 0 and icmp_reply.get("10.0.1.5") != 0) and (icmp_request.get("10.0.1.5") - icmp_reply.get("10.0.1.5") >= 4)):
-            # add flow to drop packets
-            print("DROPPED PACKETS - H5")    
-
-        if ((icmp_request.get("10.0.1.6") != 0 and icmp_reply.get("10.0.1.6") != 0) and (icmp_request.get("10.0.1.6") - icmp_reply.get("10.0.1.6") >= 4)):
-            # add flow to drop packets
-            print("DROPPED PACKETS - H6")     
-
-        if ((icmp_request.get("10.0.1.7") != 0 and icmp_reply.get("10.0.1.7") != 0) and (icmp_request.get("10.0.1.7") - icmp_reply.get("10.0.1.7") >= 4)):
-            # add flow to drop packets
-            print("DROPPED PACKETS - H7")     
-
-        if ((icmp_request.get("10.0.1.8") != 0 and icmp_reply.get("10.0.1.8") != 0) and (icmp_request.get("10.0.1.8") - icmp_reply.get("10.0.1.8") >= 4)):
-            # add flow to drop packets
-            print("DROPPED PACKETS - H8")     
-
-        if ((icmp_request.get("10.0.1.9") != 0 and icmp_reply.get("10.0.1.9") != 0) and (icmp_request.get("10.0.1.9") - icmp_reply.get("10.0.1.9") >= 4)):
-            # add flow to drop packets
-            print("DROPPED PACKETS - H9")                                            
-    
         #print(f"packet in: {pkt} from datapath id: {datapath.id}")

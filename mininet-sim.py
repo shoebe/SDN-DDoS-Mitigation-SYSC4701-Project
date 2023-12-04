@@ -10,6 +10,7 @@ from mininet.node import Host, OVSSwitch, RemoteController
 from mininet.topolib import TreeTopo
 from mininet.log import setLogLevel
 from mininet.cli import CLI
+from mininet.link import TCLink
 
 setLogLevel("info")
 
@@ -42,7 +43,7 @@ class CoolTopology(Topo):
                     arp=zip(ips, macs),
                 )
                 # 1Mbps rate from host to switch
-                self.addLink(h, s, port2=i, bw=1)
+                self.addLink(h, s, port2=i, bw=1, delay='50ms')
 
             self.addLink(s, parent_switch)
 
@@ -58,7 +59,7 @@ class CoolTopology(Topo):
             mac=f"00:0{s_ind}:00:00:00:01",
         )
         # 3Mbps
-        self.addLink(server, server_switch, bw=3)
+        self.addLink(server, server_switch, bw=3, delay='50ms')
         self.addLink(server_switch, parent_switch)
 
 
@@ -86,6 +87,7 @@ net = Mininet(
     topo=CoolTopology(),
     host=CoolHost,
     switch=OVSSwitch,
+    link=TCLink,
     build=False,
     waitConnected=False,
     autoSetMacs=True,
