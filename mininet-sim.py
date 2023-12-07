@@ -97,11 +97,12 @@ net.addController(controller)
 net.build()
 
 net.start()
-CLI(net)
 
 if True:
     for h in net.hosts[1:-1]:
-        h.cmd("python3 packet_flood_ip_spoofing.py spoof 10.0.4.1 1000")
+        #h.cmd("python3 packet_flood_ip_spoofing.py spoof 10.0.4.1 10")
+        pass
+CLI(net)
 #net.hosts[0].cmd()
 
 net.stop()
