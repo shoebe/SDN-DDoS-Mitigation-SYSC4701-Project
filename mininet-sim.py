@@ -89,7 +89,7 @@ net = Mininet(
     switch=OVSSwitch,
     link=TCLink,
     build=False,
-    waitConnected=False,
+    waitConnected=True,
     autoSetMacs=True,
     controller=RemoteController,
 )
@@ -98,5 +98,10 @@ net.build()
 
 net.start()
 CLI(net)
+
+if True:
+    for h in net.hosts[1:-1]:
+        h.cmd("python3 packet_flood_ip_spoofing.py spoof 10.0.4.1 1000")
+#net.hosts[0].cmd()
 
 net.stop()

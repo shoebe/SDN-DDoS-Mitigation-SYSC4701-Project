@@ -141,7 +141,7 @@ class SimpleSwitch13(app_manager.RyuApp):
         datapath = msg.datapath
         parser = datapath.ofproto_parser
 
-	# extract ethernet, ip, and icmp info
+        # extract ethernet, ip, and icmp info
         pkt = packet.Packet(msg.data)
         eth = pkt.get_protocols(ethernet.ethernet)[0]
         ip = pkt.get_protocols(ipv4.ipv4)[0]
@@ -168,7 +168,7 @@ class SimpleSwitch13(app_manager.RyuApp):
             self.icmp_reply[ip.dst] += 1
             host_ip = ip.dst
 
-	# print out request and reply dictionaries
+        # print out request and reply dictionaries
         self.logger.info(self.icmp_reply)
         self.logger.info(self.icmp_request)
             
