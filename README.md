@@ -3,7 +3,6 @@
 ```
 sudo apt install python3-ryu
 sudo apt install python3-scapy
-sudo apt install tcpreplay
 ```
 
 Might have to:
@@ -31,8 +30,8 @@ To run:
 in the mininet CLI:
 ```
 h1 ping server # this should always work when no DDoS is happening
-ddos spoof server h2 h3 h4 h5 h6 h7 h8 h9 # start ddos targeted at 'server' on hosts 2-9, they all spoof their IPs
-ddos normal server h2 h3 h4 h5 h6 h7 h8 h9 # start ddos targeted at 'server' on hosts 2-9, they use their IPs
+ddos spoof server h2 h3 h4 h5 h6 h7 h8 h9 # start ddos targeted at 'server' on hosts 2-9, they all spoof their IP addresses
+ddos normal server h2 h3 h4 h5 h6 h7 h8 h9 # start ddos targeted at 'server' on hosts 2-9, they use their IP addresses
 ```
 Use CTRL+C to stop the DDoS attack
 
