@@ -23,10 +23,20 @@ sudo apt install python3-ryu
 
 To run:
 ```
-./start.bash
+./start.bash # without any protection
+./start_ip_spoofing_prevention.bash # with IP spoofing protection
+./start_ddos_mitigation.bash # with IP spoofing protection + ping flood mitigation
 ```
 
-Check flows:
+in the mininet CLI:
+```
+h1 ping server # this should always work when no DDoS is happening
+ddos spoof server h2 h3 h4 h5 h6 h7 h8 h9 # start ddos targeted at 'server' on hosts 2-9, they all spoof their IPs
+ddos normal server h2 h3 h4 h5 h6 h7 h8 h9 # start ddos targeted at 'server' on hosts 2-9, they use their IPs
+```
+Use CTRL+C to stop the DDoS attack
+
+Check flows to see packet drops:
 ```
 dpctl dump-flows
 ```
