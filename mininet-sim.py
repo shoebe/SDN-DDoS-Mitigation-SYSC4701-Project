@@ -43,7 +43,7 @@ class CoolTopology(Topo):
                     arp=zip(ips, macs),
                 )
                 # 1Mbps rate from host to switch
-                self.addLink(h, s, port2=i, bw=1, delay='50ms')
+                self.addLink(h, s, port2=i, bw=0.1, delay="50ms")
 
             self.addLink(s, parent_switch)
 
@@ -59,7 +59,7 @@ class CoolTopology(Topo):
             mac=f"00:0{s_ind}:00:00:00:01",
         )
         # 3Mbps
-        self.addLink(server, server_switch, bw=3, delay='50ms')
+        self.addLink(server, server_switch, bw=0.3, delay="50ms")
         self.addLink(server_switch, parent_switch)
 
 
@@ -81,6 +81,26 @@ class CoolHost(Host):
         return r
 
 
+class CoolCLI(CLI):
+    def do_ddos(self, line):
+        args = line.split()
+        ip = args[0]
+        if ip in self.mn:
+            ip = self.mn[ip].defaultIntf().updateIP()
+
+        hosts = args[1:]
+        for host_name in hosts:
+            host = self.mn.getNodeByName(host_name)
+            host.sendCmd(f"python3 packet_flood_ip_spoofing.py spoof {ip}")
+
+    def do_stopddos(self, line):
+        hosts = line.split()
+
+        for host_name in hosts:
+            host = self.mn.getNodeByName(host_name)
+            host.sendInt()
+
+
 controller = RemoteController("controller", port=6653)
 
 net = Mininet(
@@ -98,11 +118,7 @@ net.build()
 
 net.start()
 
-if True:
-    for h in net.hosts[1:-1]:
-        #h.cmd("python3 packet_flood_ip_spoofing.py spoof 10.0.4.1 10")
-        pass
-CLI(net)
-#net.hosts[0].cmd()
+CoolCLI(net)
+# net.hosts[0].cmd()
 
 net.stop()
