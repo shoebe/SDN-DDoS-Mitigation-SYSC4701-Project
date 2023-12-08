@@ -29,7 +29,6 @@ from ryu.lib import hub
 import os
 
 
-
 class SimpleSwitch13(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
 
@@ -37,7 +36,6 @@ class SimpleSwitch13(app_manager.RyuApp):
         super(SimpleSwitch13, self).__init__(*args, **kwargs)
         self.icmp_request = {}
         self.icmp_reply = {}
-
 
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
     def switch_features_handler(self, ev):
@@ -88,7 +86,7 @@ class SimpleSwitch13(app_manager.RyuApp):
                 ),
                 parser.OFPActionOutput(port_num),
             ]
-            if switch_num == 4:
+            if switch_num == 4 and "DDOS_MITIGATION" in os.environ:
                 actions.append(parser.OFPActionOutput(ofproto.OFPP_CONTROLLER))
             self.add_flow(datapath, 2, match, actions)
 
@@ -99,11 +97,20 @@ class SimpleSwitch13(app_manager.RyuApp):
                     eth_type=ether_types.ETH_TYPE_IP,
                 )
             actions = [parser.OFPActionOutput(num_hosts + 1)]
-            if switch_num == 4:
+            if switch_num == 4 and "DDOS_MITIGATION" in os.environ:
                 actions.append(parser.OFPActionOutput(ofproto.OFPP_CONTROLLER))
             self.add_flow(datapath, 1, match, actions)
 
-    def add_flow(self, datapath, priority, match, actions, table_id=0, buffer_id=None, idle_timeout=0):
+    def add_flow(
+        self,
+        datapath,
+        priority,
+        match,
+        actions,
+        table_id=0,
+        buffer_id=None,
+        idle_timeout=0,
+    ):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
 
@@ -135,7 +142,10 @@ class SimpleSwitch13(app_manager.RyuApp):
         # the "miss_send_length" of your switch
         if ev.msg.msg_len < ev.msg.total_len:
             pass
-           
+        
+        if "DDOS_MITIGATION" not in os.environ:
+            return
+
         # extract info
         msg = ev.msg
         datapath = msg.datapath
@@ -157,7 +167,7 @@ class SimpleSwitch13(app_manager.RyuApp):
                 self.icmp_reply[ip.src] = 0
             self.icmp_request[ip.src] += 1
             host_ip = ip.src
-                
+
         # When packet is ICMP reply:
         # If reply from specific host is not in the icmp_reply dictionary, add it to both the request and reply dictionaries and set values to 0
         # Update value of specific host (key) every time packet is ICMP reply in icmp_reply dictionary
@@ -171,15 +181,14 @@ class SimpleSwitch13(app_manager.RyuApp):
         # print out request and reply dictionaries
         self.logger.info(self.icmp_reply)
         self.logger.info(self.icmp_request)
-            
+
         # If there are 4 more requests than replies, assume DDoS attack is occuring
         # Create flow to drop packets
         if self.icmp_request[host_ip] - self.icmp_reply[host_ip] >= 4:
             match = parser.OFPMatch(
-                    eth_type=ether_types.ETH_TYPE_IP,
-                    ipv4_dst='10.0.4.1',
-                    ipv4_src=host_ip,
-                )
+                eth_type=ether_types.ETH_TYPE_IP,
+                ipv4_dst="10.0.4.1",
+                ipv4_src=host_ip,
+            )
             actions = []
             self.add_flow(datapath, 3, match, actions, idle_timeout=5)
-

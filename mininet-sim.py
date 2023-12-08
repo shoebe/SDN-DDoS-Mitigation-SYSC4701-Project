@@ -84,21 +84,23 @@ class CoolHost(Host):
 class CoolCLI(CLI):
     def do_ddos(self, line):
         args = line.split()
-        ip = args[0]
+        mode = args[0]
+        ip = args[1]
         if ip in self.mn:
             ip = self.mn[ip].defaultIntf().updateIP()
 
-        hosts = args[1:]
+        hosts = args[2:]
         for host_name in hosts:
             host = self.mn.getNodeByName(host_name)
-            host.sendCmd(f"python3 packet_flood_ip_spoofing.py spoof {ip}")
-
-    def do_stopddos(self, line):
-        hosts = line.split()
-
-        for host_name in hosts:
-            host = self.mn.getNodeByName(host_name)
-            host.sendInt()
+            if mode == "spoof":
+                print(f"with src ip spoofing, flooding ip: {ip} from host {host_name}")
+                host.sendCmd(f"python3 packet_flood_ip_spoofing.py spoof {ip}")
+            elif mode == "normal":
+                print(f"flooding ip: {ip} from host {host_name}")
+                host_ip = host.defaultIntf().updateIP()
+                host.sendCmd(f"python3 packet_flood_ip_spoofing.py {host_ip} {ip}")
+            else:
+                print("errors! use 'spoof' or 'normal'")
 
 
 controller = RemoteController("controller", port=6653)
