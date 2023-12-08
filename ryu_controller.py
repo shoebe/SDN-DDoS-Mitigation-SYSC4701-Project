@@ -79,8 +79,9 @@ class CoolSwitch(app_manager.RyuApp):
             match = parser.OFPMatch()
             if "BCP38_ENABLED" in os.environ:
                 match = parser.OFPMatch(
-                    ipv4_src=addr,
                     eth_type=ether_types.ETH_TYPE_IP,
+                    in_port=port_num,
+                    ipv4_src=addr,
                 )
             actions = [parser.OFPActionOutput(num_hosts + 1)]
             if switch_num == 4 and "DDOS_MITIGATION" in os.environ:
