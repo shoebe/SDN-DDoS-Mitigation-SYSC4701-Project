@@ -95,11 +95,11 @@ class CoolCLI(CLI):
             host = self.mn.getNodeByName(host_name)
             if mode == "spoof":
                 print(f"with src ip spoofing, flooding ip: {ip} from host {host_name}")
-                host.sendCmd(f"python3 packet_flood_ip_spoofing.py spoof {ip}")
+                host.sendCmd(f"python3 packet_flood.py spoof {ip}")
             elif mode == "normal":
                 print(f"flooding ip: {ip} from host {host_name}")
                 host_ip = host.defaultIntf().updateIP()
-                host.sendCmd(f"python3 packet_flood_ip_spoofing.py {host_ip} {ip}")
+                host.sendCmd(f"python3 packet_flood.py {host_ip} {ip}")
             else:
                 print("error! use 'spoof' or 'normal'")
 
